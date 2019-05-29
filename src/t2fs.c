@@ -1,13 +1,25 @@
 
 /**
 */
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+#include <math.h>
 #include "t2fs.h"
+#include "apidisk.h"
+
+#define ERRO -1
+#define SUCESSO 0
+
 
 /*-----------------------------------------------------------------------------
 Função:	Informa a identificação dos desenvolvedores do T2FS.
 -----------------------------------------------------------------------------*/
 int identify2 (char *name, int size) {
-	return -1;
+    if(strncpy(name, "Gabriel Barros de Paula - 240427 - Carine Bertagnolli Bathaglini- 274715 - Henrique da Silva Barboza  - 272730", size)){
+        return SUCESSO;
+    }
+	return ERRO;
 }
 
 /*-----------------------------------------------------------------------------
