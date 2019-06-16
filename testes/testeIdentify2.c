@@ -9,8 +9,8 @@
 #include <string.h>
 #include <stdlib.h>
 #include <math.h>
-#include "t2fs.h"
-#include "apidisk.h"
+#include "../include/t2fs.h"
+#include "../include/apidisk.h"
 
 int main(int argc, char *argv[]) {
     int	resultado = -1;

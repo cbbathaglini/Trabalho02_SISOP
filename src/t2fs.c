@@ -1,16 +1,12 @@
-
-/**
-*/
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
 #include <math.h>
-#include "t2fs.h"
-#include "apidisk.h"
+#include "../include/t2fs.h"
+#include "../include/apidisk.h"
 
 #define ERRO -1
 #define SUCESSO 0
-
 
 /*-----------------------------------------------------------------------------
 Função:	Informa a identificação dos desenvolvedores do T2FS.
@@ -28,6 +24,7 @@ Função:	Formata logicamente o disco virtual t2fs_disk.dat para o sistema de
 		corresponde a um múltiplo de setores dados por sectors_per_block.
 -----------------------------------------------------------------------------*/
 int format2 (int sectors_per_block) {
+	
 	return -1;
 }
 

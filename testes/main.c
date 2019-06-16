@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "apidisk.h"
+#include "../include/apidisk.h"
 
 void help() {
 	
