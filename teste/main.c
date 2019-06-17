@@ -15,6 +15,19 @@ void help() {
 
 int main(int argc, char *argv[])
 {
+	
+	int teste = format2(4);
+//	printf("%d\n", teste);
+
+	t_SUPERBLOCO superbloco = readsSuperblock();
+
+	printf("Número de blocos %d \n", superbloco.numBlocos);
+	printf("Setores Por Bloco %d\n", superbloco.setoresPorBloco);
+	printf("Tamanho em Setores da FAT %d\n", superbloco.tamanhoFAT);
+	printf("Bloco do Diretório Raiz %d\n", superbloco.blocoDirRaiz);
+	printf("Número decimal do bitmap %d\n", superbloco.bitmap);
+	
+	/*
 	char	command[128];
 	char	*cmd;
 	
@@ -72,6 +85,9 @@ int main(int argc, char *argv[])
 		
 		printf("Comando nao reconhecido.\n");
 	}
+	
+	 */ 
+	
 
     return 0;
 }

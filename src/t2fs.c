@@ -24,8 +24,54 @@ Função:	Formata logicamente o disco virtual t2fs_disk.dat para o sistema de
 		corresponde a um múltiplo de setores dados por sectors_per_block.
 -----------------------------------------------------------------------------*/
 int format2 (int sectors_per_block) {
+
+	BYTE sectorBuffer[SECTOR_SIZE];
+	memset(sectorBuffer, '\0', SECTOR_SIZE);
+
+	if(sectors_per_block < 2){
+		printf("Numero de Setores muito baixo. Valor mínimo = 2 \n");
+		return ERRO;
+	}
+	else if( (sectors_per_block % 2 ) != 0){
+		printf("Um numero impar de setores p/ bloco não aproveita os setores do disco, tente um numero par.\n");
+		return ERRO;
+	}
+	 
+	 t_MBR mbr  = readsMBR(); // Lê dados do MBR para criar o superbloco
+
+	 if(sectors_per_block > mbr.SetorFinalParticao1){
+		 printf("Não há setores suficientes na partição do Disco\n");
+		 return ERRO;
+	 }
+
+	 t_SUPERBLOCO superbloco;
+
+	 superbloco.numBlocos = mbr.SetorFinalParticao1 / sectors_per_block;
+	 superbloco.setoresPorBloco = sectors_per_block;
+	 superbloco.bitmap=0;
+
+	 //////CÁLCULO DO TAMANHO DA FAT :
+	 int fatBytes = 4 * superbloco.numBlocos;		// FAT vai ser unsigned int = 4 bytes
+	 superbloco.tamanhoFAT = fatBytes / SECTOR_SIZE;	//Tamanho da FAT em Setores
+
+
+	 //No pior dos casos, FAT ocupa 8 setores (2 setores p/ bloco) e 2 blocos
+	 //se não puder fazer IF, diretório raiz então começa a partir do suposto bloco 4 = Setor 7 (posição fixa)
+
+	 if(sectors_per_block==2){
+		 superbloco.blocoDirRaiz = 6;
+	 }
+	 else if(sectors_per_block==4){
+		 superbloco.blocoDirRaiz = 3;
+	 }
+	 else{
+		 superbloco.blocoDirRaiz = 2;
+	 }
 	
-	return -1;
+	memcpy(sectorBuffer, &superbloco, SECTOR_SIZE);
+	int teste = write_sector(SUPERBLOCKSECTOR, sectorBuffer);
+	
+	return teste;
 }
 
 /*-----------------------------------------------------------------------------
@@ -148,6 +194,89 @@ Função:	Função usada para criar um caminho alternativo (softlink) com
 -----------------------------------------------------------------------------*/
 int ln2 (char *linkname, char *filename) {
 	return -1;
+}
+
+
+///////////////////////////FUNÇÕES AUXILIARES////////////////////////////
+
+//Lê os dados do MBR (Sector 0) e retorna um MBR preenchido.
+t_MBR readsMBR(){
+
+	unsigned char sectorBuffer[SECTOR_SIZE];
+	int teste = read_sector(0,sectorBuffer);
+
+	if( teste != 0 ){
+		printf("não leu\n");
+		return;
+	}
+	else {
+
+		t_MBR mbr;
+
+		short* versao = (short*) sectorBuffer;
+		mbr.versaoDisco = (int) *versao;
+	//	printf("Versão Disco %d \n", mbr.versaoDisco);
+
+		short* tamSetor = (short*)(sectorBuffer+2);
+		mbr.tamSetor = (int) *tamSetor;
+	//	printf("tamSetor %d \n", mbr.tamSetor);
+
+		short* ByteInicialTabeladeParticoes = (short*)(sectorBuffer+4);
+		mbr.BInicialTabela = (int) *ByteInicialTabeladeParticoes;
+	//	printf("Byte Inicial Tabela de particoes -: %d \n",mbr.BInicialTabela);
+
+		short* numeroParticoes = (short*)(sectorBuffer+6);
+		mbr.NumParticoes = (int) *numeroParticoes;
+	//	printf("Numero de Particoes: %d \n", mbr.NumParticoes);
+
+		int* setorInicioPart1 = (int*)(sectorBuffer+8);
+		mbr.SetorInicialParticao1 = *setorInicioPart1;
+	//	printf("%d\n", mbr.SetorInicialParticao1);
+
+		int* setorFimPart1 = (int*)(sectorBuffer+12);
+		mbr.SetorFinalParticao1 = *setorFimPart1;
+	//	printf("%d\n", mbr.SetorFinalParticao1);
+
+		
+
+
+		return mbr;
+
+		}
+
+
+}
+
+t_SUPERBLOCO readsSuperblock(){
+
+	unsigned char sectorBuffer[SECTOR_SIZE];
+	int teste = read_sector(SUPERBLOCKSECTOR,sectorBuffer);
+
+	if( teste != 0 ){
+		printf("não leu\n");
+		return;
+	}
+	else {
+
+		t_SUPERBLOCO superbloco;
+
+		short* numblocos = (short*) sectorBuffer;
+		superbloco.numBlocos = *numblocos;
+
+		short* setores = (short*)(sectorBuffer+2);
+		superbloco.setoresPorBloco = *setores;
+
+		short* tamFAT = (short*)(sectorBuffer+4);
+		superbloco.tamanhoFAT = *tamFAT;
+
+		short* dirRaiz = (short*)(sectorBuffer+6);
+		superbloco.blocoDirRaiz = *dirRaiz;
+
+		int* bitm = (int*)(sectorBuffer+8);
+		superbloco.bitmap = *bitm;
+
+		return superbloco;
+	}
 }
 
 
