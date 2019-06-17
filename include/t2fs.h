@@ -55,6 +55,9 @@ typedef struct superbloco {
 t_MBR readsMBR();
 t_SUPERBLOCO readsSuperblock();
 
+void initializeEverything();
+int initializeFAT();
+
 /*-----------------------------------------------------------------------------
 Fun��o: Usada para identificar os desenvolvedores do T2FS.
 	Essa fun��o copia um string de identifica��o para o ponteiro indicado por "name".

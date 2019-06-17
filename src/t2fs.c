@@ -7,6 +7,18 @@
 
 #define ERRO -1
 #define SUCESSO 0
+#define MAXBLOCOS 512
+
+int initialized = 0;
+int entriesPerSector=0;
+int lastindex=0;
+
+t_MBR mbr;
+t_SUPERBLOCO superbloco;
+DWORD* fat;
+unsigned int bitmap[MAXBLOCOS];
+
+
 
 /*-----------------------------------------------------------------------------
 Função:	Informa a identificação dos desenvolvedores do T2FS.
@@ -44,31 +56,31 @@ int format2 (int sectors_per_block) {
 		 return ERRO;
 	 }
 
-	 t_SUPERBLOCO superbloco;
+	 t_SUPERBLOCO superblock;
 
-	 superbloco.numBlocos = mbr.SetorFinalParticao1 / sectors_per_block;
-	 superbloco.setoresPorBloco = sectors_per_block;
-	 superbloco.bitmap=0;
+	 superblock.numBlocos = mbr.SetorFinalParticao1 / sectors_per_block;
+	 superblock.setoresPorBloco = sectors_per_block;
+	 superblock.bitmap=0;
 
 	 //////CÁLCULO DO TAMANHO DA FAT :
 	 int fatBytes = 4 * superbloco.numBlocos;		// FAT vai ser unsigned int = 4 bytes
-	 superbloco.tamanhoFAT = fatBytes / SECTOR_SIZE;	//Tamanho da FAT em Setores
+	 superblock.tamanhoFAT = fatBytes / SECTOR_SIZE;	//Tamanho da FAT em Setores
 
 
 	 //No pior dos casos, FAT ocupa 8 setores (2 setores p/ bloco) e 2 blocos
 	 //se não puder fazer IF, diretório raiz então começa a partir do suposto bloco 4 = Setor 7 (posição fixa)
 
 	 if(sectors_per_block==2){
-		 superbloco.blocoDirRaiz = 6;
+		 superblock.blocoDirRaiz = 6;
 	 }
 	 else if(sectors_per_block==4){
-		 superbloco.blocoDirRaiz = 3;
+		 superblock.blocoDirRaiz = 3;
 	 }
 	 else{
-		 superbloco.blocoDirRaiz = 2;
+		 superblock.blocoDirRaiz = 2;
 	 }
 	
-	memcpy(sectorBuffer, &superbloco, SECTOR_SIZE);
+	memcpy(sectorBuffer, &superblock, SECTOR_SIZE);
 	int teste = write_sector(SUPERBLOCKSECTOR, sectorBuffer);
 	
 	return teste;
@@ -236,15 +248,9 @@ t_MBR readsMBR(){
 		int* setorFimPart1 = (int*)(sectorBuffer+12);
 		mbr.SetorFinalParticao1 = *setorFimPart1;
 	//	printf("%d\n", mbr.SetorFinalParticao1);
-
-		
-
-
 		return mbr;
 
 		}
-
-
 }
 
 t_SUPERBLOCO readsSuperblock(){
@@ -258,25 +264,106 @@ t_SUPERBLOCO readsSuperblock(){
 	}
 	else {
 
-		t_SUPERBLOCO superbloco;
+		t_SUPERBLOCO superblock;
 
 		short* numblocos = (short*) sectorBuffer;
-		superbloco.numBlocos = *numblocos;
+		superblock.numBlocos = *numblocos;
 
 		short* setores = (short*)(sectorBuffer+2);
-		superbloco.setoresPorBloco = *setores;
+		superblock.setoresPorBloco = *setores;
 
 		short* tamFAT = (short*)(sectorBuffer+4);
-		superbloco.tamanhoFAT = *tamFAT;
+		superblock.tamanhoFAT = *tamFAT;
 
 		short* dirRaiz = (short*)(sectorBuffer+6);
-		superbloco.blocoDirRaiz = *dirRaiz;
+		superblock.blocoDirRaiz = *dirRaiz;
 
 		int* bitm = (int*)(sectorBuffer+8);
-		superbloco.bitmap = *bitm;
+		superblock.bitmap = *bitm;
 
-		return superbloco;
+		return superblock;
 	}
+}
+
+//Loads the bitmap with the 512 bits of "decimal"
+void buildsBitmap(int decimal){
+
+	int c,k;
+
+	//don't waste time trying to understand this, it works, believe me -H
+
+	for(c=MAXBLOCOS;c>=0;c-- ){
+
+		k = decimal >> c;
+
+		if(k & 1){
+			bitmap[MAXBLOCOS - c] = 1;
+		}
+		else{
+			bitmap[MAXBLOCOS- c] = 0;
+		}
+	}
+	return;
+}
+
+int initializeFAT(){
+
+	BYTE sector[SECTOR_SIZE];
+	int k;
+
+	entriesPerSector = SECTOR_SIZE/4;
+	lastindex = (superbloco.tamanhoFAT * entriesPerSector)-1;
+
+	fat = malloc(SECTOR_SIZE * superbloco.tamanhoFAT);
+
+	for(k=0;k < superbloco.tamanhoFAT; k++){
+
+		if(read_sector((FATSECTOR+k), sector) != 0){
+			printf("não leu\n");
+			return ERRO;
+		}
+		else{
+			memcpy(fat + (entriesPerSector * k), sector, SECTOR_SIZE);
+		}
+	}
+
+	return SUCESSO;
+}
+
+void initializeEverything(){
+
+	int i;
+	
+	mbr = readsMBR();
+	
+	superbloco = readsSuperblock();
+	
+	buildsBitmap(superbloco.bitmap);
+
+	int teste = initializeFAT();
+	
+	if(teste != 0){
+		printf("Não alocou FAT \n");
+		return;
+	}
+
+	for(i=0;i<superbloco.blocoDirRaiz;i++){
+		bitmap[i]=1;						//Blocos antes do diretório raiz, estão já ocupados
+		fat[i]=1;					    	// pelo superbloco e pela fat.
+	}
+
+
+	/* for(i=0; i< superbloco.blocoDirRaiz;i++ ){
+
+		printf("indice bitmap %d\n", bitmap[i]);		//Prints de teste de alocação
+		printf("counteúdo fat %d\n", fat[i]);
+
+	}*/
+	
+	initialized=1;	//everything setup!
+	return;
+	
+
 }
 
 
