@@ -47,16 +47,27 @@ typedef struct superbloco {
 	short setoresPorBloco;
 	short tamanhoFAT;		//em número de setores. P blocos = tamanhoFAT/sectors_per_block
 	short blocoDirRaiz;  //Bloco inicial da área de dados
-	int bitmap;			// +bitmap
-					   // Superbloco ocupa 12 bytes no total. 
+	int bitmap[4];		// +bitmap
+					   // Superbloco ocupa 24 bytes no total. 
 
 } t_SUPERBLOCO;
+
+typedef struct directoryEntry {
+    char    name[MAX_FILE_NAME_SIZE+1]; /* Nome do arquivo cuja entrada foi lida do disco      */
+    BYTE    fileType;                   /* Tipo do arquivo: regular (0x01) ou diret�rio (0x02) */
+    DWORD   fileSize;                   /* Numero de bytes do arquivo                          */
+	DWORD	firstBlock;
+} t_entradaDir;
+
+
 
 t_MBR readsMBR();
 t_SUPERBLOCO readsSuperblock();
 
 void initializeEverything();
 int initializeFAT();
+int initializeRoot();
+int writeBlock(BYTE *buffer,int block, int raiz, int setoresPBloco);
 
 /*-----------------------------------------------------------------------------
 Fun��o: Usada para identificar os desenvolvedores do T2FS.

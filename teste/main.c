@@ -15,11 +15,13 @@ void help() {
 
 int main(int argc, char *argv[])
 {
-	int i;
+//	int i;
 	int teste = format2(4);
 //	printf("%d\n", teste);
 
 	initializeEverything();
+
+
 
 
 	/* printf("Número de blocos %d \n", superbloco.numBlocos);

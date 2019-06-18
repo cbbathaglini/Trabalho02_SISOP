@@ -7,16 +7,21 @@
 
 #define ERRO -1
 #define SUCESSO 0
-#define MAXBLOCOS 512
+#define MAXBLOCOS 256
 
-int initialized = 0;
-int entriesPerSector=0;
+int entradasPorDir; //Número máximo de entradas em um diretório
+int initialized = 0; //Flag para saber se estruturas do sistema foram carregadas do disco
+int entriesPerSector=0; //
+int tamBloco;
 int lastindex=0;
+int entradasPorSet;
 
 t_MBR mbr;
 t_SUPERBLOCO superbloco;
 DWORD* fat;
+t_entradaDir* raiz;
 unsigned int bitmap[MAXBLOCOS];
+
 
 
 
@@ -37,11 +42,13 @@ Função:	Formata logicamente o disco virtual t2fs_disk.dat para o sistema de
 -----------------------------------------------------------------------------*/
 int format2 (int sectors_per_block) {
 
+	int i;
+
 	BYTE sectorBuffer[SECTOR_SIZE];
 	memset(sectorBuffer, '\0', SECTOR_SIZE);
 
-	if(sectors_per_block < 2){
-		printf("Numero de Setores muito baixo. Valor mínimo = 2 \n");
+	if(sectors_per_block < 4){
+		printf("Numero de Setores muito baixo. Valor mínimo = 4 \n");
 		return ERRO;
 	}
 	else if( (sectors_per_block % 2 ) != 0){
@@ -60,7 +67,12 @@ int format2 (int sectors_per_block) {
 
 	 superblock.numBlocos = mbr.SetorFinalParticao1 / sectors_per_block;
 	 superblock.setoresPorBloco = sectors_per_block;
-	 superblock.bitmap=0;
+	
+	 for(i=0;i<4;i++){
+		 superblock.bitmap[i] = 0;
+	 }
+	 
+	 
 
 	 //////CÁLCULO DO TAMANHO DA FAT :
 	 int fatBytes = 4 * superbloco.numBlocos;		// FAT vai ser unsigned int = 4 bytes
@@ -70,10 +82,12 @@ int format2 (int sectors_per_block) {
 	 //No pior dos casos, FAT ocupa 8 setores (2 setores p/ bloco) e 2 blocos
 	 //se não puder fazer IF, diretório raiz então começa a partir do suposto bloco 4 = Setor 7 (posição fixa)
 
-	 if(sectors_per_block==2){
+	/*if(sectors_per_block==2){
 		 superblock.blocoDirRaiz = 6;
 	 }
-	 else if(sectors_per_block==4){
+	 else  */
+	 
+	 if(sectors_per_block==4){
 		 superblock.blocoDirRaiz = 3;
 	 }
 	 else{
@@ -81,9 +95,36 @@ int format2 (int sectors_per_block) {
 	 }
 	
 	memcpy(sectorBuffer, &superblock, SECTOR_SIZE);
-	int teste = write_sector(SUPERBLOCKSECTOR, sectorBuffer);
+	int teste = write_sector(SUPERBLOCKSECTOR, sectorBuffer);		//Grava Superbloco
 	
-	return teste;
+	//Cria um vetor de entrada de diretórios pra ser o diretório raiz
+	//Marca todos como desocupado (filetype=0)
+	//passa todos esses dados pra um vetorzão pra ser gravado
+	//Grava diretório raiz:
+
+	
+	entradasPorDir = (SECTOR_SIZE*sectors_per_block) / sizeof(t_entradaDir); //Checar Conta
+	
+	t_entradaDir entradas[entradasPorDir];
+
+	for(i=0;i<entradasPorDir;i++){
+
+		entradas[i].fileType=0;
+		
+	}
+
+	BYTE writingBuffer[SECTOR_SIZE*sectors_per_block]; // Tamanho bloco em bytes = tamanhosetor*setoresPorBloco
+
+	memcpy(writingBuffer,entradas,sizeof(entradas));
+
+	int teste2 = writeBlock(writingBuffer,superblock.blocoDirRaiz,superblock.blocoDirRaiz,sectors_per_block);
+
+	if(teste ==1 && teste2 ==1){
+		return SUCESSO;
+	}
+	else{
+		return ERRO;
+	}
 }
 
 /*-----------------------------------------------------------------------------
@@ -257,6 +298,7 @@ t_SUPERBLOCO readsSuperblock(){
 
 	unsigned char sectorBuffer[SECTOR_SIZE];
 	int teste = read_sector(SUPERBLOCKSECTOR,sectorBuffer);
+	int i;
 
 	if( teste != 0 ){
 		printf("não leu\n");
@@ -278,31 +320,41 @@ t_SUPERBLOCO readsSuperblock(){
 		short* dirRaiz = (short*)(sectorBuffer+6);
 		superblock.blocoDirRaiz = *dirRaiz;
 
-		int* bitm = (int*)(sectorBuffer+8);
-		superblock.bitmap = *bitm;
+		
+		int* bitmap1 = (int*)(sectorBuffer+8);
+		int* bitmap2 = (int*)(sectorBuffer+12);
+		int* bitmap3 = (int*)(sectorBuffer+16);
+		int* bitmap4 = (int*)(sectorBuffer+20);
+
+		superblock.bitmap[0]= *bitmap1;
+		superblock.bitmap[1]= *bitmap2;
+		superblock.bitmap[2]= *bitmap3;
+		superblock.bitmap[3]= *bitmap4;
+
+		
 
 		return superblock;
 	}
 }
 
-//Loads the bitmap with the 512 bits of "decimal"
-void buildsBitmap(int decimal){
 
-	int c,k;
+//Loads the bitmap with 32 bits of "decimal"
+void buildsBitmap(int decimal,int piece){
 
-	//don't waste time trying to understand this, it works, believe me -H
+	int i, result[32];
 
-	for(c=MAXBLOCOS;c>=0;c-- ){
-
-		k = decimal >> c;
-
-		if(k & 1){
-			bitmap[MAXBLOCOS - c] = 1;
-		}
-		else{
-			bitmap[MAXBLOCOS- c] = 0;
-		}
+	for(i=0;i<32;i++)
+		result[i]=0;
+	
+	for(i=0;decimal>0;i++){
+		result[i]=decimal%2;
+		decimal=decimal/2;
 	}
+
+	for(i=32-1;i>=0;i--){
+		bitmap[32-1-i + (piece*32)] = result[i];
+	}
+
 	return;
 }
 
@@ -338,7 +390,9 @@ void initializeEverything(){
 	
 	superbloco = readsSuperblock();
 	
-	buildsBitmap(superbloco.bitmap);
+	for(i=0;i<4;i++){
+		buildsBitmap(superbloco.bitmap[i],i);
+	}
 
 	int teste = initializeFAT();
 	
@@ -347,11 +401,20 @@ void initializeEverything(){
 		return;
 	}
 
+	entradasPorDir = (SECTOR_SIZE* superbloco.setoresPorBloco) / sizeof(t_entradaDir); //Checar Conta
+	entradasPorSet = SECTOR_SIZE/sizeof(t_entradaDir);
+	tamBloco = SECTOR_SIZE*superbloco.setoresPorBloco;
+
 	for(i=0;i<superbloco.blocoDirRaiz;i++){
 		bitmap[i]=1;						//Blocos antes do diretório raiz, estão já ocupados
 		fat[i]=1;					    	// pelo superbloco e pela fat.
 	}
-
+	
+	int teste2 = initializeRoot();
+	if(teste2==ERRO){
+		printf("root not initiated\n");
+		return;
+	}
 
 	/* for(i=0; i< superbloco.blocoDirRaiz;i++ ){
 
@@ -360,10 +423,59 @@ void initializeEverything(){
 
 	}*/
 	
+	for(i=0;i<32;i++){
+		printf("%d",bitmap[i+32]);
+	}
+	printf("\n");
+
 	initialized=1;	//everything setup!
 	return;
 	
 
+}
+
+int initializeRoot(){
+
+	raiz=malloc(tamBloco);
+	int i;
+	BYTE sector[SECTOR_SIZE];
+	int dataSectorStart = superbloco.setoresPorBloco *superbloco.blocoDirRaiz; //CHECAR SE CONTA ESTÁ CERTA
+
+	for(i=0;i<superbloco.setoresPorBloco;i++){
+
+		int position = dataSectorStart + (superbloco.blocoDirRaiz * superbloco.setoresPorBloco);
+		if( read_sector(position+i,sector) != 0 ){
+
+			printf("Não gravou bloco\n");
+			return ERRO;
+		}
+
+		memcpy(raiz+ (entradasPorSet*i),sector,SECTOR_SIZE);
+	}
+
+	bitmap[superbloco.blocoDirRaiz]=1;
+	return SUCESSO;
+
+}
+
+
+int writeBlock(BYTE *buffer,int block, int raiz, int setoresPBloco){
+
+	int i;
+	int dataSectorStart = setoresPBloco*raiz; //CHECAR SE CONTA ESTÁ CERTA
+	BYTE sector[SECTOR_SIZE];
+	memset(sector,'\0',SECTOR_SIZE);
+
+	for(i=0;i<setoresPBloco;i++){
+
+		int position = dataSectorStart + (block * setoresPBloco);
+		memcpy(sector,(buffer + (SECTOR_SIZE*i)), SECTOR_SIZE);
+
+		if((write_sector(position+i,sector)) !=0){
+			return ERRO;
+		}
+	}
+	return SUCESSO;
 }
 
 
